@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GIST-AI Summarizer</title>
+<meta name="description" content="Paste any article, essay, or long text and get a concise, faithful summary in seconds.">
+<meta name="color-scheme" content="light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,500;1,9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="/favicon.png">
+<style>
+  :root{
+    --paper: #F7F5F0;
+    --card: #FFFDFB;
+    --ink: #1A1A1A;
+    --marker: #FF5A1F;
+    --marker-soft: rgba(255, 90, 31, 0.16);
+    --marker-text: #C9440F;
+    --charcoal: #2E2E2E;
+    --line: rgba(26,26,26,0.10);
+    --error: var(--marker-text);
+    --shadow: 0 30px 60px -30px rgba(26,26,26,0.25);
+  }
+
+  *{ box-sizing: border-box; }
+  html{ scroll-behavior: smooth; }
+
+  body{
+    margin:0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+
+  .mono{
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+
+  a{ color: inherit; }
+
+  /* ---------- Layout shell ---------- */
+  .wrap{
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  /* ---------- Nav ---------- */
+  header{
+    padding: 28px 0 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+  }
+  .logo{
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+  }
+  .logo .dot{ color: var(--marker); }
+  .nav-tag{
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--charcoal);
+    opacity: 0.55;
+    font-weight: 500;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding: 96px 0 40px;
+    position: relative;
+  }
+  .eyebrow{
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--marker-text);
+    font-weight: 500;
+    margin-bottom: 22px;
+    display:flex;
+    align-items:center;
+    gap: 10px;
+  }
+  .eyebrow::before{
+    content:"";
+    width: 6px; height: 6px;
+    background: var(--marker);
+    border-radius: 50%;
+    display:inline-block;
+  }
+
+  h1{
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: clamp(42px, 6.2vw, 76px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0 0 26px;
+    max-width: 780px;
+  }
+  .highlight-wrap{
+    position: relative;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  .highlight-wrap svg{
+    position: absolute;
+    left: -4px; right: -6px;
+    bottom: -6px;
+    width: calc(100% + 10px);
+    height: 22px;
+    z-index: -1;
+  }
+
+  .subhead{
+    font-size: 19px;
+    color: var(--charcoal);
+    max-width: 480px;
+    margin: 0 0 8px;
+  }
+  .microcopy{
+    font-size: 13px;
+    color: var(--charcoal);
+    opacity: 0.55;
+    margin: 0 0 64px;
+  }
+
+  /* ---------- Composition: card + character ---------- */
+  .stage{
+    position: relative;
+  }
+
+  .character{
+    position: absolute;
+    top: -86px;
+    right: 26px;
+    width: 168px;
+    height: auto;
+    z-index: 3;
+    pointer-events: none;
+    filter: drop-shadow(0 18px 26px rgba(26,26,26,0.18));
+    transform-origin: 60% 85%;
+  }
+  .character.is-pleased{
+    animation: pleased 0.55s ease;
+  }
+  @keyframes pleased{
+    0%   { transform: rotate(0deg) translateY(0); }
+    35%  { transform: rotate(-6deg) translateY(-6px); }
+    65%  { transform: rotate(3deg) translateY(0); }
+    100% { transform: rotate(0deg) translateY(0); }
+  }
+
+  /* ---------- Summarizer card ---------- */
+  .card{
+    background: var(--card);
+    border-radius: 22px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--line);
+    padding: 8px;
+    position: relative;
+    z-index: 2;
+  }
+  .card-inner{
+    border-radius: 16px;
+    padding: 8px 8px 0;
+    position: relative;
+  }
+
+  .textarea-shell{
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    transition: box-shadow 0.15s ease;
+  }
+  .textarea-shell:focus-within{
+    box-shadow: 0 0 0 3px var(--marker-soft);
+  }
+
+  textarea{
+    width: 100%;
+    min-height: 220px;
+    resize: vertical;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: 'Inter', sans-serif;
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--ink);
+    padding: 26px 26px 10px;
+    display:block;
+  }
+  textarea::placeholder{ color: rgba(26,26,26,0.35); }
+  textarea:disabled{ color: rgba(26,26,26,0.45); }
+
+  .scan-overlay{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    opacity:0;
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      var(--marker-soft) 45%,
+      var(--marker-soft) 55%,
+      transparent 100%
+    );
+    background-size: 100% 300%;
+    background-position: 0 -100%;
+  }
+  .card.is-processing .scan-overlay{
+    opacity: 1;
+    animation: sweep 1.3s ease-in-out infinite;
+  }
+  @keyframes sweep{
+    0%   { background-position: 0 -140%; }
+    100% { background-position: 0 140%; }
+  }
+
+  .card-footer{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    padding: 14px 22px 22px;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .word-count{
+    font-size: 12.5px;
+    color: var(--charcoal);
+    opacity: 0.6;
+  }
+  .word-count strong{
+    color: var(--ink);
+    opacity: 1;
+    font-weight: 500;
+  }
+
+  .form-error{
+    font-size: 12.5px;
+    color: var(--error);
+    padding: 0 22px 14px;
+    margin: -4px 0 0;
+    display: none;
+  }
+  .form-error.is-visible{ display: block; }
+
+  button.primary{
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--paper);
+    background: var(--ink);
+    border: none;
+    padding: 13px 22px;
+    border-radius: 100px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    transition: transform 0.15s ease, background 0.2s ease;
+  }
+  button.primary:hover:not(:disabled){
+    background: var(--marker);
+    transform: translateY(-1px);
+  }
+  button.primary:active:not(:disabled){ transform: translateY(0); }
+  button.primary:disabled{
+    cursor: default;
+    opacity: 0.75;
+  }
+  button.primary .arrow{
+    transition: transform 0.2s ease;
+  }
+  button.primary:hover:not(:disabled) .arrow{ transform: translateX(3px); }
+
+  .pulse-dot{
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--paper);
+    display:inline-block;
+    animation: pulse 0.9s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%, 100% { opacity: 0.35; transform: scale(0.85); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+
+  button.ghost{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    background: none;
+    border: none;
+    color: var(--marker-text);
+    cursor: pointer;
+    padding: 10px 2px;
+    margin: -10px -2px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    border-radius: 3px;
+  }
+
+  /* ---------- Results ---------- */
+  .results{
+    margin-top: 22px;
+    background: var(--card);
+    border-radius: 22px;
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+    padding: 34px 36px 30px;
+    display: none;
+  }
+  .results.is-visible{
+    display: block;
+    animation: rise 0.5s cubic-bezier(.22,.8,.32,1);
+  }
+  @keyframes rise{
+    from{ opacity: 0; transform: translateY(14px); }
+    to{ opacity: 1; transform: translateY(0); }
+  }
+
+  .stat-row{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--charcoal);
+    padding-bottom: 20px;
+    margin-bottom: 22px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .stat-row .num{
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .stat-row .reduction{
+    color: var(--marker-text);
+    font-weight: 500;
+    background: var(--marker-soft);
+    padding: 3px 10px;
+    border-radius: 100px;
+  }
+  .stat-sep{ opacity: 0.4; }
+
+  .summary-text{
+    font-size: 18px;
+    line-height: 1.75;
+    color: var(--ink);
+    max-width: 68ch;
+    margin: 0 0 22px;
+  }
+  .summary-text p{ margin: 0 0 16px; }
+  .summary-text p:last-child{ margin-bottom: 0; }
+  .summary-text ul{
+    margin: 0 0 16px;
+    padding-left: 1.3em;
+  }
+  .summary-text li{ margin-bottom: 8px; }
+  .summary-text li::marker{ color: var(--marker-text); }
+
+  .results-footer{
+    display:flex;
+    justify-content: flex-end;
+    gap: 22px;
+  }
+
+  /* ---------- Footer ---------- */
+  footer{
+    padding: 60px 0 48px;
+    margin-top: 40px;
+    border-top: 1px solid var(--line);
+  }
+  footer .wrap{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  footer .foot-note{
+    font-size: 12.5px;
+    color: var(--charcoal);
+    opacity: 0.5;
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 720px){
+    .wrap{ padding: 0 20px; }
+    .hero{ padding: 56px 0 20px; }
+    .character{
+      position: static;
+      width: 128px;
+      margin: 0 auto 28px;
+      display: block;
+    }
+    .microcopy{ margin-bottom: 40px; }
+    textarea{ font-size: 16px; padding: 22px 20px 8px; }
+    .card-footer{ padding: 12px 18px 18px; }
+    .results{ padding: 26px 22px 24px; }
+    .summary-text{ font-size: 16.5px; }
+  }
+
+  button.primary:focus-visible,
+  button.ghost:focus-visible{
+    outline: 2px solid var(--marker-text);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.001s !important; transition-duration: 0.001s !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav-inner">
+    <div class="logo">Gist<span class="dot">.</span></div>
+    <div class="nav-tag mono">AI Summarizer</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <p class="eyebrow mono">Paste it. Skip it. Know it.</p>
+    <h1>
+      You have too much to read.<br>
+      I'll find what <span class="highlight-wrap">matters
+        <svg viewBox="0 0 220 22" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M2,14 C40,20 160,20 218,10" stroke="#FF5A1F" stroke-width="14" stroke-linecap="round" fill="none" opacity="0.85"/>
+        </svg>
+      </span>.
+    </h1>
+    <p class="subhead">Paste anything — an article, an essay, a wall of Slack messages. Get the parts worth keeping.</p>
+    <p class="microcopy mono">No sign-up. No saving. Just paste and go.</p>
+
+    <div class="stage">
+      <!-- Highlighter character, integrated with the card corner -->
+      <svg class="character" id="character" viewBox="0 0 200 260" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M18,238 C55,224 95,232 150,214" stroke="#FF5A1F" stroke-width="16" stroke-linecap="round" opacity="0.35"/>
+        <line x1="108" y1="176" x2="150" y2="230" stroke="#1A1A1A" stroke-width="7" stroke-linecap="round"/>
+        <ellipse cx="154" cy="234" rx="10" ry="6" fill="#1A1A1A"/>
+        <line x1="96" y1="180" x2="60" y2="222" stroke="#1A1A1A" stroke-width="7" stroke-linecap="round"/>
+        <ellipse cx="55" cy="227" rx="10" ry="6" fill="#1A1A1A"/>
+        <path d="M64,96 C40,110 30,132 44,150" stroke="#1A1A1A" stroke-width="7" stroke-linecap="round" fill="none"/>
+        <path d="M134,90 C158,84 166,64 152,44" stroke="#1A1A1A" stroke-width="7" stroke-linecap="round" fill="none"/>
+        <g transform="translate(100,120) rotate(-16)">
+          <rect x="-46" y="-92" width="92" height="184" rx="20" fill="#FF5A1F"/>
+          <rect x="-46" y="-52" width="92" height="8" fill="#1A1A1A" opacity="0.14"/>
+          <path d="M-30,-92 L30,-92 L14,-124 L-14,-124 Z" fill="#1A1A1A"/>
+          <g transform="translate(0,-14)">
+            <rect x="-38" y="-10" width="30" height="20" rx="7" fill="#1A1A1A"/>
+            <rect x="8" y="-10" width="30" height="20" rx="7" fill="#1A1A1A"/>
+            <line x1="-8" y1="0" x2="8" y2="0" stroke="#1A1A1A" stroke-width="5"/>
+            <line x1="-46" y1="-4" x2="-38" y2="-2" stroke="#1A1A1A" stroke-width="5" stroke-linecap="round"/>
+          </g>
+        </g>
+      </svg>
+
+      <form id="summarizer-form" class="card" novalidate>
+        <div class="card-inner">
+          <div class="textarea-shell">
+            <label for="source-text" class="sr-only" style="position:absolute;left:-9999px;">Text to summarize</label>
+            <textarea
+              id="source-text"
+              placeholder="Paste an article, essay, or any wall of text…"
+              required
+            ></textarea>
+            <div class="scan-overlay" aria-hidden="true"></div>
+          </div>
+        </div>
+        <p class="form-error mono" id="form-error" role="alert"></p>
+        <div class="card-footer">
+          <p class="word-count mono" id="word-count" aria-live="polite"><strong>0</strong> words</p>
+          <button type="submit" class="primary" id="submit-btn">
+            <span id="btn-label">Highlight it</span>
+            <span class="arrow" id="btn-arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <section class="results" id="results" aria-live="polite">
+      <div class="stat-row mono">
+        <span><span class="num" id="stat-original">0</span> words in</span>
+        <span class="stat-sep">·</span>
+        <span><span class="num" id="stat-summary">0</span> words out</span>
+        <span class="stat-sep">·</span>
+        <span class="reduction" id="stat-reduction">0% shorter</span>
+      </div>
+      <div class="summary-text" id="summary-output"></div>
+      <div class="results-footer">
+        <button type="button" class="ghost" id="copy-btn">Copy summary</button>
+        <button type="button" class="ghost" id="reset-btn">Start again →</button>
+      </div>
+    </section>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="logo" style="font-size:16px;">Gist<span class="dot">.</span></div>
+    <p class="foot-note mono">Built for reading less and knowing more.</p>
+  </div>
+</footer>
+
+<script>
+  const form = document.getElementById('summarizer-form');
+  const textarea = document.getElementById('source-text');
+  const wordCountEl = document.getElementById('word-count');
+  const card = form;
+  const submitBtn = document.getElementById('submit-btn');
+  const btnLabel = document.getElementById('btn-label');
+  const results = document.getElementById('results');
+  const statOriginal = document.getElementById('stat-original');
+  const statSummary = document.getElementById('stat-summary');
+  const statReduction = document.getElementById('stat-reduction');
+  const summaryOutput = document.getElementById('summary-output');
+  const resetBtn = document.getElementById('reset-btn');
+  const copyBtn = document.getElementById('copy-btn');
+  const formError = document.getElementById('form-error');
+  const character = document.getElementById('character');
+
+  const MIN_WORDS = 5;
+
+  function countWords(str){
+    const trimmed = str.trim();
+    if(!trimmed) return 0;
+    return trimmed.split(/\s+/).length;
+  }
+
+  function updateWordCount(){
+    const n = countWords(textarea.value);
+    wordCountEl.innerHTML = `<strong>${n}</strong> word${n === 1 ? '' : 's'}`;
+  }
+  textarea.addEventListener('input', updateWordCount);
+
+  function showError(message){
+    formError.textContent = message;
+    formError.classList.add('is-visible');
+  }
+  function clearError(){
+    formError.textContent = '';
+    formError.classList.remove('is-visible');
+  }
+
+  function setLoading(isLoading){
+    if (isLoading){
+      card.classList.add('is-processing');
+      textarea.disabled = true;
+      submitBtn.disabled = true;
+      btnLabel.textContent = 'Highlighting';
+      document.getElementById('btn-arrow').outerHTML = '<span class="pulse-dot" id="btn-arrow"></span>';
+    } else {
+      card.classList.remove('is-processing');
+      textarea.disabled = false;
+      submitBtn.disabled = false;
+      btnLabel.textContent = 'Highlight it';
+      document.getElementById('btn-arrow').outerHTML = '<span class="arrow" id="btn-arrow" aria-hidden="true">→</span>';
+    }
+  }
+
+  function renderSummary(container, text){
+    container.innerHTML = '';
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    let list = null;
+
+    lines.forEach(line => {
+      const isBullet = /^[-*•]\s+/.test(line);
+      if (isBullet) {
+        if (!list) {
+          list = document.createElement('ul');
+          container.appendChild(list);
+        }
+        const li = document.createElement('li');
+        li.textContent = line.replace(/^[-*•]\s+/, '');
+        list.appendChild(li);
+      } else {
+        list = null;
+        const p = document.createElement('p');
+        p.textContent = line;
+        container.appendChild(p);
+      }
+    });
+  }
+
+  async function requestSummary(text){
+    const response = await fetch('/api/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+
+    let data = {};
+    try { data = await response.json(); } catch (_) { /* non-JSON error body */ }
+
+    if (!response.ok) {
+      throw new Error(data.error || "Something went wrong. Please try again.");
+    }
+    return data.summary;
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearError();
+
+    const raw = textarea.value.trim();
+    if (!raw) {
+      showError('Paste some text first — there\u2019s nothing to highlight yet.');
+      textarea.focus();
+      return;
+    }
+    if (countWords(raw) < MIN_WORDS) {
+      showError('That\u2019s already short enough — nothing to highlight.');
+      textarea.focus();
+      return;
+    }
+
+    setLoading(true);
+    results.classList.remove('is-visible');
+
+    try {
+      const summary = await requestSummary(raw);
+      const originalCount = countWords(raw);
+      const summaryCount = countWords(summary);
+      const reduction = originalCount > 0
+        ? Math.round((1 - summaryCount / originalCount) * 100)
+        : 0;
+
+      statOriginal.textContent = originalCount;
+      statSummary.textContent = summaryCount;
+      statReduction.textContent = `${Math.max(reduction, 0)}% shorter`;
+      summaryOutput.dataset.raw = summary;
+      renderSummary(summaryOutput, summary);
+      copyBtn.textContent = 'Copy summary';
+
+      results.classList.add('is-visible');
+
+      character.classList.remove('is-pleased');
+      void character.offsetWidth; // restart animation
+      character.classList.add('is-pleased');
+
+      if (typeof results.scrollIntoView === 'function') {
+        results.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    } catch (err) {
+      showError(err.message || "Couldn't reach the summarizer. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    textarea.value = '';
+    updateWordCount();
+    clearError();
+    results.classList.remove('is-visible');
+    summaryOutput.innerHTML = '';
+    delete summaryOutput.dataset.raw;
+    textarea.focus();
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(summaryOutput.dataset.raw || summaryOutput.textContent);
+      copyBtn.textContent = 'Copied ✓';
+      setTimeout(() => { copyBtn.textContent = 'Copy summary'; }, 1800);
+    } catch (_) {
+      copyBtn.textContent = 'Press ⌘/Ctrl+C';
+      setTimeout(() => { copyBtn.textContent = 'Copy summary'; }, 1800);
+    }
+  });
+</script>
+
+</body>
+</html>
